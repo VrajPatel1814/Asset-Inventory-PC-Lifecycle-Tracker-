@@ -2,123 +2,137 @@ import streamlit as st
 import pandas as pd
 from database import get_all_assets, get_asset_by_id, update_asset, retire_asset
 
+BADGE = {
+    "Active":        '<span class="badge b-active">ACTIVE</span>',
+    "Needs Refresh": '<span class="badge b-refresh">REFRESH</span>',
+    "Retired":       '<span class="badge b-retired">RETIRED</span>',
+    "Available":     '<span class="badge b-available">AVAILABLE</span>',
+}
+
 def render():
     st.markdown("""
-    <div class="main-header">
-        <h1>🖥️ Asset Inventory</h1>
-        <p>Search, filter, and manage all 75+ IT assets</p>
+    <div class="ops-header">
+        <div class="ops-tag">ASSET REGISTRY</div>
+        <div class="ops-title">Asset Inventory</div>
+        <p class="ops-sub">Search, filter and manage all tracked IT devices</p>
     </div>
     """, unsafe_allow_html=True)
 
     # ── FILTERS ──────────────────────────────────────────────────
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: status_f   = st.selectbox("Status",   ["All","Active","Needs Refresh","Retired","Available"])
-    with col2: dept_f     = st.selectbox("Department",["All","Finance","HR","IT","Operations","Sales",
-                                                        "Accounting","Engineering","Quality","Marketing"])
-    with col3: type_f     = st.selectbox("Type",     ["All","Laptop","Desktop","Monitor","Mobile Device"])
-    with col4: location_f = st.selectbox("Location", ["All","Windsor HQ","Plant Floor"])
-    with col5: search     = st.text_input("🔍 Search", placeholder="Name, serial, model...")
+    c1,c2,c3,c4,c5 = st.columns(5)
+    with c1: sf = st.selectbox("STATUS",   ["All","Active","Needs Refresh","Retired","Available"], label_visibility="visible")
+    with c2: df_f = st.selectbox("DEPT",   ["All","Finance","HR","IT","Operations","Sales","Accounting","Engineering","Quality","Marketing"])
+    with c3: tf = st.selectbox("TYPE",     ["All","Laptop","Desktop","Monitor","Mobile Device"])
+    with c4: lf = st.selectbox("LOCATION", ["All","Windsor HQ","Plant Floor"])
+    with c5: kw = st.text_input("SEARCH", placeholder="asset ID, name, model...")
 
     assets = get_all_assets(
-        status_filter=None   if status_f   == "All" else status_f,
-        dept_filter=None     if dept_f     == "All" else dept_f,
-        type_filter=None     if type_f     == "All" else type_f,
-        location_filter=None if location_f == "All" else location_f,
+        status_filter=None   if sf   == "All" else sf,
+        dept_filter=None     if df_f == "All" else df_f,
+        type_filter=None     if tf   == "All" else tf,
+        location_filter=None if lf   == "All" else lf,
     )
+    if kw:
+        s = kw.lower()
+        assets = [a for a in assets if s in a["asset_id"].lower() or
+                  s in a["serial_number"].lower() or s in a["assigned_to"].lower() or
+                  s in a["model"].lower() or s in a["brand"].lower()]
 
-    if search:
-        s = search.lower()
-        assets = [a for a in assets if
-                  s in a["asset_id"].lower() or
-                  s in a["serial_number"].lower() or
-                  s in a["assigned_to"].lower() or
-                  s in a["model"].lower() or
-                  s in a["brand"].lower()]
+    col_l, col_r = st.columns([3,1])
+    with col_l:
+        st.markdown(f'<span style="font-family:IBM Plex Mono,monospace; font-size:0.75rem; color:#64748b;">'
+                    f'{len(assets)} RECORDS FOUND</span>', unsafe_allow_html=True)
+    with col_r:
+        if assets:
+            csv = pd.DataFrame([dict(a) for a in assets]).to_csv(index=False).encode()
+            st.download_button("⬇ EXPORT CSV", csv, "assets.csv", "text/csv",
+                               use_container_width=True)
 
-    st.markdown(f"**{len(assets)} asset(s) found**")
-
-    # ── EXPORT CSV ───────────────────────────────────────────────
-    if assets:
-        df_export = pd.DataFrame([dict(a) for a in assets])
-        csv = df_export.to_csv(index=False).encode("utf-8")
-        st.download_button("⬇️ Export to CSV", csv, "assets_export.csv",
-                           "text/csv", use_container_width=False)
-
-    st.markdown("---")
+    st.markdown('<hr style="border-color:#2a2f3d; margin:0.8rem 0;">', unsafe_allow_html=True)
 
     if not assets:
-        st.info("No assets match the selected filters.")
+        st.markdown('<div class="warn-bar">NO ASSETS MATCH THE SELECTED FILTERS</div>',
+                    unsafe_allow_html=True)
         return
 
-    STATUS_ICON = {"Active":"🟢","Needs Refresh":"🟡","Retired":"⚫","Available":"🔵"}
+    # ── TABLE HEADER ──────────────────────────────────────────────
+    st.markdown("""
+    <div class="tbl-header">
+        <div style="display:grid; grid-template-columns:0.7fr 1fr 1.6fr 1.4fr 1.8fr 1.3fr 1.2fr 1.1fr 0.5fr;
+                    gap:0.5rem; align-items:center;">
+            <span>ID</span><span>TYPE</span><span>DEVICE</span><span>SERIAL</span>
+            <span>ASSIGNED TO</span><span>DEPT</span><span>LOCATION</span><span>STATUS</span><span></span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     if "edit_asset" not in st.session_state:
         st.session_state.edit_asset = None
 
-    # ── ASSET TABLE ───────────────────────────────────────────────
-    header = st.columns([1, 1.2, 1.5, 1.5, 1.8, 1.5, 1.2, 1.2, 0.8])
-    for col, label in zip(header, ["ID","Type","Brand / Model","Serial #",
-                                    "Assigned To","Department","Location","Status",""]):
-        col.markdown(f"**{label}**")
-    st.divider()
-
     for asset in assets:
-        icon = STATUS_ICON.get(asset["status"], "⚪")
-        cols = st.columns([1, 1.2, 1.5, 1.5, 1.8, 1.5, 1.2, 1.2, 0.8])
-        cols[0].markdown(asset["asset_id"])
-        cols[1].markdown(asset["device_type"])
-        cols[2].markdown(f"{asset['brand']} {asset['model']}")
-        cols[3].markdown(f"`{asset['serial_number']}`")
-        cols[4].markdown(asset["assigned_to"])
-        cols[5].markdown(asset["department"])
-        cols[6].markdown(asset["location"])
-        cols[7].markdown(f"{icon} {asset['status']}")
-        if cols[8].button("✏️", key=f"edit_{asset['asset_id']}"):
+        badge = BADGE.get(asset["status"], "")
+        c1,c2,c3,c4,c5,c6,c7,c8,c9 = st.columns([0.7,1,1.6,1.4,1.8,1.3,1.2,1.1,0.5])
+        c1.markdown(f'<span class="mono-tag">{asset["asset_id"]}</span>', unsafe_allow_html=True)
+        c2.markdown(f'<small style="color:#94a3b8">{asset["device_type"]}</small>', unsafe_allow_html=True)
+        c3.markdown(f'<span style="color:#e2e8f0;font-size:0.85rem">{asset["brand"]} {asset["model"]}</span>', unsafe_allow_html=True)
+        c4.markdown(f'<span class="mono-tag">{asset["serial_number"]}</span>', unsafe_allow_html=True)
+        c5.markdown(f'<span style="color:#e2e8f0;font-size:0.85rem">{asset["assigned_to"]}</span>', unsafe_allow_html=True)
+        c6.markdown(f'<small style="color:#64748b">{asset["department"]}</small>', unsafe_allow_html=True)
+        c7.markdown(f'<small style="color:#64748b">{asset["location"]}</small>', unsafe_allow_html=True)
+        c8.markdown(badge, unsafe_allow_html=True)
+        if c9.button("✎", key=f"e_{asset['asset_id']}"):
             st.session_state.edit_asset = asset["asset_id"]
             st.rerun()
-        st.divider()
+        st.markdown('<hr style="border-color:#1c2030;margin:2px 0;">', unsafe_allow_html=True)
 
     # ── EDIT PANEL ────────────────────────────────────────────────
     if st.session_state.edit_asset:
         asset = get_asset_by_id(st.session_state.edit_asset)
         if asset:
-            st.markdown("---")
-            st.markdown(f"### ✏️ Editing: {asset['asset_id']} — {asset['brand']} {asset['model']}")
+            st.markdown(f"""
+            <div style="background:#141720; border:1px solid #f59e0b; border-radius:6px;
+                        padding:1.2rem 1.4rem; margin-top:1rem;">
+                <div class="ops-tag">EDITING RECORD</div>
+                <div style="font-size:1.1rem; font-weight:700; color:#e2e8f0; margin-bottom:0.8rem;">
+                    {asset['asset_id']} · {asset['brand']} {asset['model']}
+                    <span class="mono-tag" style="margin-left:8px;">{asset['serial_number']}</span>
+                </div>
+            """, unsafe_allow_html=True)
 
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown(f"**Serial Number:** `{asset['serial_number']}`")
-                st.markdown(f"**Purchase Date:** {asset['purchase_date']}")
-                new_assigned = st.text_input("Assigned To", value=asset["assigned_to"])
-                new_dept     = st.selectbox("Department",
-                    ["Finance","HR","IT","Operations","Sales","Accounting","Engineering","Quality","Marketing"],
-                    index=["Finance","HR","IT","Operations","Sales","Accounting","Engineering","Quality","Marketing"].index(
-                        asset["department"]) if asset["department"] in
-                        ["Finance","HR","IT","Operations","Sales","Accounting","Engineering","Quality","Marketing"] else 0)
-            with col_b:
-                new_location = st.selectbox("Location", ["Windsor HQ","Plant Floor"],
-                    index=["Windsor HQ","Plant Floor"].index(asset["location"]) if asset["location"] in ["Windsor HQ","Plant Floor"] else 0)
-                new_status   = st.selectbox("Status",
-                    ["Active","Needs Refresh","Retired","Available"],
-                    index=["Active","Needs Refresh","Retired","Available"].index(asset["status"])
-                          if asset["status"] in ["Active","Needs Refresh","Retired","Available"] else 0)
-                new_notes    = st.text_area("Notes", value=asset["notes"] or "")
+            c1,c2 = st.columns(2)
+            with c1:
+                st.caption(f"Purchase Date: {asset['purchase_date']}")
+                new_assigned = st.text_input("ASSIGNED TO", value=asset["assigned_to"])
+                depts = ["Finance","HR","IT","Operations","Sales","Accounting","Engineering","Quality","Marketing"]
+                new_dept = st.selectbox("DEPARTMENT", depts,
+                    index=depts.index(asset["department"]) if asset["department"] in depts else 0)
+            with c2:
+                new_loc = st.selectbox("LOCATION", ["Windsor HQ","Plant Floor"],
+                    index=["Windsor HQ","Plant Floor"].index(asset["location"])
+                          if asset["location"] in ["Windsor HQ","Plant Floor"] else 0)
+                statuses = ["Active","Needs Refresh","Retired","Available"]
+                new_status = st.selectbox("STATUS", statuses,
+                    index=statuses.index(asset["status"]) if asset["status"] in statuses else 0)
+                new_notes = st.text_area("NOTES", value=asset["notes"] or "", height=80)
 
-            col_s, col_r, col_c = st.columns(3)
-            with col_s:
-                if st.button("💾 Save Changes", type="primary", use_container_width=True):
+            cs, cr, cc = st.columns(3)
+            with cs:
+                if st.button("SAVE CHANGES", type="primary", use_container_width=True):
                     update_asset(asset["asset_id"], new_assigned, new_dept,
-                                 new_location, new_status, new_notes, "IT Admin")
-                    st.success(f"✅ {asset['asset_id']} updated successfully!")
+                                 new_loc, new_status, new_notes, "IT Admin")
+                    st.markdown('<div class="ok-bar">✓ RECORD UPDATED SUCCESSFULLY</div>',
+                                unsafe_allow_html=True)
                     st.session_state.edit_asset = None
                     st.rerun()
-            with col_r:
-                if st.button("🗑️ Retire Asset", use_container_width=True):
+            with cr:
+                if st.button("RETIRE ASSET", use_container_width=True):
                     retire_asset(asset["asset_id"], "IT Admin")
-                    st.warning(f"Asset {asset['asset_id']} has been retired.")
+                    st.markdown('<div class="warn-bar">⚠ ASSET RETIRED</div>',
+                                unsafe_allow_html=True)
                     st.session_state.edit_asset = None
                     st.rerun()
-            with col_c:
-                if st.button("✖ Cancel", use_container_width=True):
+            with cc:
+                if st.button("CANCEL", use_container_width=True):
                     st.session_state.edit_asset = None
                     st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)

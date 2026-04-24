@@ -4,66 +4,78 @@ from database import get_onboarding_log
 
 def render():
     st.markdown("""
-    <div class="main-header">
-        <h1>📋 Onboarding & Offboarding Log</h1>
-        <p>Full audit record of all employee equipment transitions</p>
+    <div class="ops-header">
+        <div class="ops-tag">AUDIT RECORD</div>
+        <div class="ops-title">Transition Log</div>
+        <p class="ops-sub">Complete onboarding and offboarding history — exportable for compliance</p>
     </div>
     """, unsafe_allow_html=True)
 
     logs = get_onboarding_log()
-
     if not logs:
-        st.info("No onboarding or offboarding records yet.")
+        st.markdown('<div class="warn-bar">NO TRANSITION RECORDS YET — Complete an onboarding or offboarding first.</div>',
+                    unsafe_allow_html=True)
         return
 
     df = pd.DataFrame([dict(l) for l in logs])
-
-    # Summary
     on_count  = len(df[df["log_type"] == "Onboarding"])
     off_count = len(df[df["log_type"] == "Offboarding"])
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f"""<div class="metric-card">
-            <div class="value">{len(df)}</div>
-            <div class="label">Total Transitions</div>
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""<div class="stat-tile m">
+            <div class="stat-val">{len(df)}</div>
+            <div class="stat-lbl">TOTAL TRANSITIONS</div>
         </div>""", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""<div class="metric-card">
-            <div class="value">{on_count}</div>
-            <div class="label">Onboarding Events</div>
+    with c2:
+        st.markdown(f"""<div class="stat-tile g">
+            <div class="stat-val">{on_count}</div>
+            <div class="stat-lbl">ONBOARDING EVENTS</div>
         </div>""", unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"""<div class="metric-card">
-            <div class="value">{off_count}</div>
-            <div class="label">Offboarding Events</div>
+    with c3:
+        st.markdown(f"""<div class="stat-tile t">
+            <div class="stat-val">{off_count}</div>
+            <div class="stat-lbl">OFFBOARDING EVENTS</div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Filter
-    filter_type = st.selectbox("Filter by Type", ["All", "Onboarding", "Offboarding"])
-    if filter_type != "All":
-        df = df[df["log_type"] == filter_type]
+    ft = st.selectbox("FILTER BY TYPE", ["All","Onboarding","Offboarding"])
+    filtered = df if ft == "All" else df[df["log_type"] == ft]
 
-    # Display
-    for _, row in df.iterrows():
-        icon = "👤" if row["log_type"] == "Onboarding" else "📤"
-        color = "#f0fff4" if row["log_type"] == "Onboarding" else "#fff5f5"
-        border = "#38a169" if row["log_type"] == "Onboarding" else "#e53e3e"
+    st.markdown('<div class="section-label">RECORDS</div>', unsafe_allow_html=True)
+
+    for _, row in filtered.iterrows():
+        is_on  = row["log_type"] == "Onboarding"
+        color  = "#22c55e" if is_on else "#14b8a6"
+        bg     = "rgba(34,197,94,0.06)" if is_on else "rgba(20,184,166,0.06)"
+        symbol = "↓" if is_on else "↑"
         st.markdown(f"""
-        <div style="background:{color}; border-left:4px solid {border};
-             border-radius:8px; padding:1rem; margin-bottom:0.5rem;">
-            <strong>{icon} {row['log_type']} — {row['employee_name']}</strong>
-            &nbsp;&nbsp;|&nbsp;&nbsp; {row['department']}
-            &nbsp;&nbsp;|&nbsp;&nbsp; 🕐 {row['processed_at']}
-            &nbsp;&nbsp;|&nbsp;&nbsp; 👤 Processed by: {row['processed_by']}<br>
-            <small>Assets: <code>{row['asset_ids']}</code></small><br>
-            {"<small>Notes: " + row['notes'] + "</small>" if row['notes'] else ""}
+        <div style="background:{bg}; border:1px solid #2a2f3d; border-left:3px solid {color};
+                    border-radius:4px; padding:0.8rem 1rem; margin-bottom:5px;">
+            <span style="font-family:IBM Plex Mono,monospace; font-size:0.7rem;
+                         color:{color}; font-weight:600; letter-spacing:0.1em;">
+                {symbol} {row['log_type'].upper()}
+            </span>
+            &nbsp;·&nbsp;
+            <span style="color:#e2e8f0; font-size:0.85rem; font-weight:600;">{row['employee_name']}</span>
+            &nbsp;·&nbsp;
+            <span style="color:#64748b; font-size:0.78rem;">{row['department']}</span>
+            &nbsp;·&nbsp;
+            <span style="font-family:IBM Plex Mono,monospace; font-size:0.72rem; color:#64748b;">
+                {row['processed_at']}
+            </span><br>
+            <span style="font-family:IBM Plex Mono,monospace; font-size:0.72rem; color:#94a3b8;">
+                ASSETS: {row['asset_ids']}
+            </span>
+            &nbsp;·&nbsp;
+            <span style="font-family:IBM Plex Mono,monospace; font-size:0.72rem; color:#64748b;">
+                BY: {row['processed_by']}
+            </span>
+            {"<br><span style='font-size:0.78rem;color:#64748b;'>" + row['notes'] + "</span>" if row['notes'] else ""}
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("---")
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Export Log to CSV", csv,
-                       "onboarding_offboarding_log.csv", "text/csv")
+    st.markdown("<br>", unsafe_allow_html=True)
+    csv = filtered.to_csv(index=False).encode()
+    st.download_button("⬇ EXPORT LOG CSV", csv, "transition_log.csv", "text/csv")
