@@ -1,12 +1,18 @@
 import streamlit as st
 from database import get_all_assets, log_onboarding, update_asset
+from theme import THEME_CSS
 
 def render():
+    st.markdown(THEME_CSS, unsafe_allow_html=True)
+
     st.markdown("""
-    <div class="ops-header">
-        <div class="ops-tag">EMPLOYEE LIFECYCLE</div>
-        <div class="ops-title">Equipment Onboarding</div>
-        <p class="ops-sub">Assign IT equipment to a new employee and log the transition</p>
+    <div class="page-header">
+        <div class="page-header-icon">👋</div>
+        <div class="page-header-text">
+            <div class="eyebrow">Workforce</div>
+            <h1>Employee Onboarding</h1>
+            <p>Assign IT equipment to a new employee and generate a transition record</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -14,69 +20,64 @@ def render():
 
     if not available:
         st.markdown("""
-        <div class="warn-bar">
-            ⚠ NO AVAILABLE ASSETS — All devices are currently assigned or retired.
-            Offboard an employee or retire a device to free up inventory.
+        <div class="warn-pill">
+            ⚠️ &nbsp; No available assets right now.
+            Offboard an employee or add new equipment to free up inventory.
         </div>
         """, unsafe_allow_html=True)
         return
 
-    col1, col2, col3 = st.columns([1, 2.5, 1])
-    with col2:
-        st.markdown(f"""
-        <div class="ok-bar">
-            ✓ {len(available)} ASSETS AVAILABLE FOR ASSIGNMENT
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(f'<div class="ok-pill">✅ &nbsp; {len(available)} assets available for assignment</div>',
+                unsafe_allow_html=True)
 
+    _, col, _ = st.columns([0.5, 3, 0.5])
+    with col:
         with st.form("onboarding_form", clear_on_submit=True):
-            st.markdown('<div class="section-label">EMPLOYEE DETAILS</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-head">Employee Details</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
-                employee_name = st.text_input("FULL NAME", placeholder="e.g. John Smith")
-                department    = st.selectbox("DEPARTMENT", [
+                name  = st.text_input("Full Name", placeholder="e.g. John Smith")
+                dept  = st.selectbox("Department", [
                     "Finance","HR","IT","Operations","Sales",
                     "Accounting","Engineering","Quality","Marketing"
                 ])
             with c2:
-                location     = st.selectbox("LOCATION", ["Windsor HQ","Plant Floor"])
-                processed_by = st.text_input("PROCESSED BY (IT STAFF)",
-                                             placeholder="e.g. Omar Farouk")
+                loc   = st.selectbox("Location", ["Windsor HQ","Plant Floor"])
+                by    = st.text_input("Processed By (IT Staff)", placeholder="e.g. Omar Farouk")
 
-            st.markdown('<div class="section-label" style="margin-top:1rem;">SELECT EQUIPMENT TO ASSIGN</div>',
+            st.markdown('<div class="section-head" style="margin-top:1rem;">Equipment to Assign</div>',
                         unsafe_allow_html=True)
 
-            asset_options = {
-                f"{a['asset_id']}  ·  {a['brand']} {a['model']}  ·  {a['device_type']}": a["asset_id"]
+            opts = {
+                f"{a['asset_id']}  ·  {a['brand']} {a['model']}  ({a['device_type']})": a["asset_id"]
                 for a in available
             }
+            chosen = st.multiselect("Select assets", options=list(opts.keys()),
+                                    help="Only Available assets are shown")
+            notes  = st.text_area("Notes", placeholder="e.g. Standard Finance kit — laptop + monitor",
+                                  height=80)
 
-            selected_labels = st.multiselect(
-                "AVAILABLE ASSETS", options=list(asset_options.keys()),
-                help="Only Available assets are shown"
-            )
+            sub = st.form_submit_button("Complete Onboarding →", type="primary",
+                                        use_container_width=True)
 
-            notes = st.text_area("NOTES", placeholder="e.g. Standard kit for Finance — laptop + monitor",
-                                 height=80)
-
-            submitted = st.form_submit_button("COMPLETE ONBOARDING →",
-                                             type="primary", use_container_width=True)
-
-        if submitted:
-            if not employee_name or not processed_by or not selected_labels:
-                st.markdown('<div class="alert-bar">✗ MISSING REQUIRED FIELDS — name, IT staff, and at least one asset</div>',
+        if sub:
+            if not name or not by or not chosen:
+                st.markdown('<div class="alert-pill">⚠️ &nbsp; Please fill in all required fields and select at least one asset</div>',
                             unsafe_allow_html=True)
             else:
-                selected_ids = [asset_options[l] for l in selected_labels]
-                for aid in selected_ids:
-                    update_asset(aid, employee_name, department, location, "Active", "", processed_by)
-                log_onboarding(employee_name, department, selected_ids, processed_by, notes)
+                ids = [opts[l] for l in chosen]
+                for aid in ids:
+                    update_asset(aid, name, dept, loc, "Active", "", by)
+                log_onboarding(name, dept, ids, by, notes)
 
                 st.markdown(f"""
-                <div class="ok-bar">
-                    ✓ ONBOARDING COMPLETE — {employee_name} · {department} · {location}<br>
-                    ASSETS ASSIGNED: {', '.join(selected_ids)}<br>
-                    PROCESSED BY: {processed_by} · LOGGED TO TRANSITION RECORD
+                <div class="ok-pill" style="display:block;border-radius:10px;padding:1rem 1.2rem;">
+                    ✅ &nbsp; <b>Onboarding complete for {name}</b><br>
+                    <span style="font-size:0.82rem;margin-left:1.6rem;">
+                        Department: {dept} · {loc}<br>
+                        Assets assigned: {', '.join(ids)}<br>
+                        Processed by: {by}
+                    </span>
                 </div>
                 """, unsafe_allow_html=True)
                 st.balloons()

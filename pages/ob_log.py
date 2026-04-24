@@ -1,81 +1,86 @@
 import streamlit as st
 import pandas as pd
 from database import get_onboarding_log
+from theme import THEME_CSS
 
 def render():
+    st.markdown(THEME_CSS, unsafe_allow_html=True)
+
     st.markdown("""
-    <div class="ops-header">
-        <div class="ops-tag">AUDIT RECORD</div>
-        <div class="ops-title">Transition Log</div>
-        <p class="ops-sub">Complete onboarding and offboarding history — exportable for compliance</p>
+    <div class="page-header">
+        <div class="page-header-icon">📋</div>
+        <div class="page-header-text">
+            <div class="eyebrow">Workforce</div>
+            <h1>Transition Log</h1>
+            <p>Complete onboarding and offboarding history — exportable for compliance</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
     logs = get_onboarding_log()
     if not logs:
-        st.markdown('<div class="warn-bar">NO TRANSITION RECORDS YET — Complete an onboarding or offboarding first.</div>',
+        st.markdown('<div class="warn-pill">⚠️ &nbsp; No records yet — complete an onboarding or offboarding first</div>',
                     unsafe_allow_html=True)
         return
 
     df = pd.DataFrame([dict(l) for l in logs])
-    on_count  = len(df[df["log_type"] == "Onboarding"])
-    off_count = len(df[df["log_type"] == "Offboarding"])
+    on_c  = len(df[df["log_type"] == "Onboarding"])
+    off_c = len(df[df["log_type"] == "Offboarding"])
 
-    c1,c2,c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""<div class="stat-tile m">
-            <div class="stat-val">{len(df)}</div>
-            <div class="stat-lbl">TOTAL TRANSITIONS</div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""<div class="stat-tile g">
-            <div class="stat-val">{on_count}</div>
-            <div class="stat-lbl">ONBOARDING EVENTS</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""<div class="stat-tile t">
-            <div class="stat-val">{off_count}</div>
-            <div class="stat-lbl">OFFBOARDING EVENTS</div>
-        </div>""", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    kpis = [
+        (c1, str(len(df)),  "Total Transitions", "#f4f6f3","#1a2e1d","🔄"),
+        (c2, str(on_c),     "Onboarding Events", "#d8f3dc","#1b4332","👋"),
+        (c3, str(off_c),    "Offboarding Events","#fce7f3","#831843","🚪"),
+    ]
+    for col, val, lbl, bg, fg, icon in kpis:
+        with col:
+            st.markdown(f"""
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:{bg};">{icon}</div>
+                <div class="kpi-val" style="color:{fg};">{val}</div>
+                <div class="kpi-lbl">{lbl}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    ft = st.selectbox("FILTER BY TYPE", ["All","Onboarding","Offboarding"])
-    filtered = df if ft == "All" else df[df["log_type"] == ft]
+    ft = st.selectbox("Filter", ["All","Onboarding","Offboarding"])
+    filt = df if ft == "All" else df[df["log_type"] == ft]
 
-    st.markdown('<div class="section-label">RECORDS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-head">Records</div>', unsafe_allow_html=True)
 
-    for _, row in filtered.iterrows():
+    for _, row in filt.iterrows():
         is_on  = row["log_type"] == "Onboarding"
-        color  = "#22c55e" if is_on else "#14b8a6"
-        bg     = "rgba(34,197,94,0.06)" if is_on else "rgba(20,184,166,0.06)"
-        symbol = "↓" if is_on else "↑"
+        extra  = "" if is_on else "off"
+        symbol = "👋" if is_on else "🚪"
+        ltype  = row["log_type"]
         st.markdown(f"""
-        <div style="background:{bg}; border:1px solid #2a2f3d; border-left:3px solid {color};
-                    border-radius:4px; padding:0.8rem 1rem; margin-bottom:5px;">
-            <span style="font-family:IBM Plex Mono,monospace; font-size:0.7rem;
-                         color:{color}; font-weight:600; letter-spacing:0.1em;">
-                {symbol} {row['log_type'].upper()}
-            </span>
-            &nbsp;·&nbsp;
-            <span style="color:#e2e8f0; font-size:0.85rem; font-weight:600;">{row['employee_name']}</span>
-            &nbsp;·&nbsp;
-            <span style="color:#64748b; font-size:0.78rem;">{row['department']}</span>
-            &nbsp;·&nbsp;
-            <span style="font-family:IBM Plex Mono,monospace; font-size:0.72rem; color:#64748b;">
-                {row['processed_at']}
-            </span><br>
-            <span style="font-family:IBM Plex Mono,monospace; font-size:0.72rem; color:#94a3b8;">
-                ASSETS: {row['asset_ids']}
-            </span>
-            &nbsp;·&nbsp;
-            <span style="font-family:IBM Plex Mono,monospace; font-size:0.72rem; color:#64748b;">
-                BY: {row['processed_by']}
-            </span>
-            {"<br><span style='font-size:0.78rem;color:#64748b;'>" + row['notes'] + "</span>" if row['notes'] else ""}
+        <div class="transition-card {extra}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <span style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
+                                 letter-spacing:0.08em;color:{'#52b788' if is_on else '#e76f51'};">
+                        {symbol} {ltype}
+                    </span>
+                    &nbsp;&nbsp;
+                    <span style="font-weight:600;font-size:0.9rem;">{row['employee_name']}</span>
+                    &nbsp;
+                    <span style="color:#6b7c6e;font-size:0.82rem;">{row['department']}</span>
+                </div>
+                <span style="font-size:0.75rem;color:#6b7c6e;">{row['processed_at']}</span>
+            </div>
+            <div style="margin-top:5px;font-size:0.8rem;color:#6b7c6e;">
+                Assets: <span class="mono">{row['asset_ids']}</span>
+                &nbsp;·&nbsp; By: {row['processed_by']}
+                {"&nbsp;·&nbsp; " + row['notes'] if row['notes'] else ""}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    csv = filtered.to_csv(index=False).encode()
-    st.download_button("⬇ EXPORT LOG CSV", csv, "transition_log.csv", "text/csv")
+    col_dl, _ = st.columns([1,3])
+    with col_dl:
+        csv = filt.to_csv(index=False).encode()
+        st.download_button("⬇ Export Log", csv, "transition_log.csv", "text/csv",
+                           use_container_width=True)

@@ -3,13 +3,19 @@ import pandas as pd
 import plotly.express as px
 from datetime import date
 from database import get_refresh_candidates, get_all_assets
+from theme import THEME_CSS
 
 def render():
+    st.markdown(THEME_CSS, unsafe_allow_html=True)
+
     st.markdown("""
-    <div class="ops-header">
-        <div class="ops-tag">LIFECYCLE MANAGEMENT</div>
-        <div class="ops-title">PC Refresh Planner</div>
-        <p class="ops-sub">Devices exceeding 3-year lifecycle threshold — sorted by priority</p>
+    <div class="page-header">
+        <div class="page-header-icon">🔄</div>
+        <div class="page-header-text">
+            <div class="eyebrow">Lifecycle Management</div>
+            <h1>PC Refresh Planner</h1>
+            <p>Devices exceeding the 3-year lifecycle threshold, prioritised for action</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -19,7 +25,7 @@ def render():
     today      = pd.Timestamp(date.today())
 
     if not candidates:
-        st.markdown('<div class="ok-bar">✓ ALL CLEAR — No devices currently require refresh.</div>',
+        st.markdown('<div class="ok-pill">✅ &nbsp; All clear — every device is within its 3-year lifecycle</div>',
                     unsafe_allow_html=True)
         return
 
@@ -31,68 +37,69 @@ def render():
     high     = len(df[(df["age_years"] >= 4) & (df["age_years"] < 5)])
     medium   = len(df[df["age_years"] < 4])
 
-    # ── STAT TILES ────────────────────────────────────────────────
+    # ── KPI CARDS ────────────────────────────────────────────────
     c1,c2,c3,c4 = st.columns(4)
-    with c1:
-        st.markdown(f"""<div class="stat-tile">
-            <div class="stat-val">{len(df)}</div>
-            <div class="stat-lbl">TOTAL FLAGGED</div>
-            <div style="font-family:IBM Plex Mono,monospace;font-size:0.65rem;color:#64748b;margin-top:4px;">
-            {round(len(df)/total*100)}% OF INVENTORY</div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""<div class="stat-tile r">
-            <div class="stat-val">{critical}</div>
-            <div class="stat-lbl">CRITICAL · 5+ YRS</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""<div class="stat-tile">
-            <div class="stat-val">{high}</div>
-            <div class="stat-lbl">HIGH · 4–5 YRS</div>
-        </div>""", unsafe_allow_html=True)
-    with c4:
-        st.markdown(f"""<div class="stat-tile m">
-            <div class="stat-val">{medium}</div>
-            <div class="stat-lbl">MEDIUM · 3–4 YRS</div>
-        </div>""", unsafe_allow_html=True)
+    kpis = [
+        (c1, str(len(df)),  "Total Flagged",   f"{round(len(df)/total*100)}% of inventory",
+         "#f4f6f3","#1a2e1d","📋"),
+        (c2, str(critical), "Critical (5+ yrs)","Replace immediately",
+         "#fee2e2","#991b1b","🔴"),
+        (c3, str(high),     "High (4–5 yrs)",  "Schedule next quarter",
+         "#ffedd5","#9a3412","🟠"),
+        (c4, str(medium),   "Medium (3–4 yrs)","Budget next fiscal year",
+         "#fef9c3","#713f12","🟡"),
+    ]
+    for col, val, lbl, sub, bg, fg, icon in kpis:
+        with col:
+            st.markdown(f"""
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background:{bg};">{icon}</div>
+                <div class="kpi-val" style="color:{fg};">{val}</div>
+                <div class="kpi-lbl">{lbl}</div>
+                <div class="kpi-sub">{sub}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── CHARTS ───────────────────────────────────────────────────
-    THEME = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                 font=dict(family="IBM Plex Mono,monospace",color="#94a3b8",size=9),
-                 margin=dict(t=10,b=10,l=10,r=10), height=260)
+    PLOTLY = dict(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans,sans-serif",color="#6b7c6e",size=10),
+        margin=dict(t=10,b=30,l=10,r=10), height=260,
+        xaxis=dict(gridcolor="#e2e8da",zeroline=False,linecolor="#e2e8da",
+                   tickfont=dict(size=10,color="#6b7c6e")),
+        yaxis=dict(gridcolor="#e2e8da",zeroline=False,linecolor="#e2e8da",
+                   tickfont=dict(size=10,color="#6b7c6e")),
+    )
 
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        st.markdown('<div class="section-label">REFRESH NEED BY DEPARTMENT</div>',
-                    unsafe_allow_html=True)
-        dept_r = df["department"].value_counts().reset_index()
-        dept_r.columns = ["Dept","Count"]
-        fig1 = px.bar(dept_r, x="Count", y="Dept", orientation="h", text="Count",
-                      color="Count", color_continuous_scale=["#1c2030","#ef4444"])
-        fig1.update_layout(**THEME, coloraxis_showscale=False,
-                           yaxis=dict(autorange="reversed", gridcolor="#2a2f3d",
-                                      zeroline=False, linecolor="#2a2f3d"),
-                           xaxis=dict(gridcolor="#2a2f3d", zeroline=False))
-        fig1.update_traces(textposition="outside", textfont_color="#94a3b8")
+    ca, cb = st.columns(2)
+    with ca:
+        st.markdown('<div class="section-head">Refresh Need by Department</div>', unsafe_allow_html=True)
+        d = df["department"].value_counts().reset_index()
+        d.columns = ["Dept","Count"]
+        fig1 = px.bar(d, x="Count", y="Dept", orientation="h", text="Count",
+                      color="Count", color_continuous_scale=["#fef9c3","#c1121f"])
+        fig1.update_layout(**PLOTLY, coloraxis_showscale=False,
+                           yaxis=dict(autorange="reversed",gridcolor="#e2e8da",
+                                      zeroline=False,linecolor="#e2e8da",
+                                      tickfont=dict(size=10,color="#6b7c6e")))
+        fig1.update_traces(textposition="outside",textfont=dict(color="#6b7c6e",size=10),
+                           marker_line_width=0)
         st.plotly_chart(fig1, use_container_width=True)
 
-    with col_b:
-        st.markdown('<div class="section-label">REFRESH NEED BY DEVICE TYPE</div>',
-                    unsafe_allow_html=True)
-        type_r = df["device_type"].value_counts().reset_index()
-        type_r.columns = ["Type","Count"]
-        cmap   = {"Laptop":"#f59e0b","Desktop":"#ef4444","Monitor":"#64748b","Mobile Device":"#14b8a6"}
-        fig2   = px.pie(type_r, names="Type", values="Count",
-                        color="Type", color_discrete_map=cmap, hole=0.45)
-        fig2.update_layout(**THEME, legend=dict(orientation="h", y=-0.2, font=dict(size=9)))
-        fig2.update_traces(textfont_color="#94a3b8")
+    with cb:
+        st.markdown('<div class="section-head">Refresh Need by Device Type</div>', unsafe_allow_html=True)
+        t = df["device_type"].value_counts().reset_index()
+        t.columns = ["Type","Count"]
+        cmap = {"Laptop":"#e76f51","Desktop":"#e9c46a","Monitor":"#84a98c","Mobile Device":"#52b788"}
+        fig2 = px.pie(t, names="Type", values="Count",
+                      color="Type", color_discrete_map=cmap, hole=0.48)
+        fig2.update_layout(**PLOTLY, legend=dict(orientation="h",y=-0.2,font=dict(size=10)))
+        fig2.update_traces(textfont=dict(color="#6b7c6e",size=10))
         st.plotly_chart(fig2, use_container_width=True)
 
     # ── FULL TABLE ────────────────────────────────────────────────
-    st.markdown('<div class="section-label" style="margin-top:1rem;">FULL REFRESH CANDIDATE LIST — OLDEST FIRST</div>',
+    st.markdown('<div class="section-head" style="margin-top:0.5rem;">Full Candidate List — Oldest First</div>',
                 unsafe_allow_html=True)
 
     export_df = df[["asset_id","device_type","brand","model","serial_number",
@@ -101,30 +108,44 @@ def render():
                          "Dept","Location","Purchase Date","Age (yrs)","Status"]
     export_df = export_df.sort_values("Age (yrs)", ascending=False)
 
-    def row_color(row):
-        if row["Age (yrs)"] >= 5:   return ["background-color:#1a1020"] * len(row)
-        elif row["Age (yrs)"] >= 4: return ["background-color:#141410"] * len(row)
-        else:                        return ["background-color:#141720"] * len(row)
+    def row_style(row):
+        if row["Age (yrs)"] >= 5:   return ["background-color:#fff5f5"]*len(row)
+        elif row["Age (yrs)"] >= 4: return ["background-color:#fffbeb"]*len(row)
+        else:                        return ["background-color:#fefce8"]*len(row)
 
-    st.dataframe(export_df.style.apply(row_color, axis=1),
+    st.dataframe(export_df.style.apply(row_style, axis=1),
                  use_container_width=True, hide_index=True)
 
-    csv = export_df.to_csv(index=False).encode()
-    st.download_button("⬇ EXPORT REFRESH PLAN", csv, "pc_refresh_plan.csv", "text/csv")
+    col_dl, _ = st.columns([1,3])
+    with col_dl:
+        csv = export_df.to_csv(index=False).encode()
+        st.download_button("⬇ Export Refresh Plan", csv, "refresh_plan.csv", "text/csv",
+                           use_container_width=True)
 
     # ── ACTION PLAN ───────────────────────────────────────────────
-    st.markdown('<div class="section-label" style="margin-top:1.2rem;">RECOMMENDED ACTION PLAN</div>',
+    st.markdown('<div class="section-head" style="margin-top:1rem;">Recommended Action Plan</div>',
                 unsafe_allow_html=True)
     st.markdown(f"""
-    <div style="background:#141720; border:1px solid #2a2f3d; border-radius:6px; padding:1rem;
-                font-family:IBM Plex Mono,monospace; font-size:0.78rem; line-height:2.2;">
-        <span class="prio-c">■ CRITICAL ({critical} devices, 5+ yrs)</span>
-        &nbsp;→&nbsp; Replace immediately — end of supported lifecycle<br>
-        <span class="prio-h">■ HIGH ({high} devices, 4–5 yrs)</span>
-        &nbsp;→&nbsp; Schedule replacement within next quarter<br>
-        <span class="prio-m">■ MEDIUM ({medium} devices, 3–4 yrs)</span>
-        &nbsp;→&nbsp; Monitor — plan budget for next fiscal year<br>
-        <span style="color:#22c55e;">■ ALL OTHERS ({total - len(df)} devices)</span>
-        &nbsp;→&nbsp; No action required
+    <div style="background:#fff;border:1.5px solid #e2e8da;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(30,60,35,0.08);">
+        <div class="action-plan-row">
+            <span class="badge b-critical">Critical</span>
+            <span style="font-weight:600;">{critical} devices — 5+ years old</span>
+            <span style="color:#6b7c6e;font-size:0.82rem;">Replace immediately — end of supported lifecycle</span>
+        </div>
+        <div class="action-plan-row">
+            <span class="badge b-high">High</span>
+            <span style="font-weight:600;">{high} devices — 4–5 years old</span>
+            <span style="color:#6b7c6e;font-size:0.82rem;">Schedule replacement within next quarter</span>
+        </div>
+        <div class="action-plan-row">
+            <span class="badge b-medium">Medium</span>
+            <span style="font-weight:600;">{medium} devices — 3–4 years old</span>
+            <span style="color:#6b7c6e;font-size:0.82rem;">Monitor and plan budget for next fiscal year</span>
+        </div>
+        <div class="action-plan-row">
+            <span class="badge b-active">OK</span>
+            <span style="font-weight:600;">{total - len(df)} devices — within lifecycle</span>
+            <span style="color:#6b7c6e;font-size:0.82rem;">No action required at this time</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
